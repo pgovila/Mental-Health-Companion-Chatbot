@@ -4,9 +4,13 @@ colorama==0.4.6
 rich==13.7.0
 flask==3.1.1
 gunicorn==23.0.0
-transformers==4.46.3
 
-# CPU-only torch build (much smaller than the default CUDA build — important
-# for free-tier hosting where disk/RAM is limited and there's no GPU anyway).
---extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.9.0
+# NOTE: transformers + torch (the HuggingFace emotion classifier) are
+# intentionally NOT installed here. Render's free tier (512MB RAM) gets
+# OOM-killed (exit 137) when the model loads, so the deployed/live version
+# runs on keyword + TextBlob classification only — the analyzer already
+# falls back to this automatically when the transformer can't be loaded.
+#
+# To use the upgraded transformer-based classifier LOCALLY (more accurate,
+# but needs ~1GB+ RAM), install the extra file instead:
+#   pip install -r requirements-local.txt
