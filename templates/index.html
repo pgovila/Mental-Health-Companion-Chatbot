@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Mental Health Companion</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ── Sidebar ─────────────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">🧠</span>
+        <span class="logo-text">MH Companion</span>
+      </div>
+      <p class="tagline">A safe space for students</p>
+    </div>
+
+    <div class="sidebar-section">
+      <p class="sidebar-label">QUICK ACTIONS</p>
+      <button class="side-btn" onclick="sendCommand('quote')">💬 Motivational Quote</button>
+      <button class="side-btn" onclick="sendCommand('relax')">🌿 Relaxation Exercise</button>
+      <button class="side-btn" onclick="sendCommand('mood')">📊 Mood Summary</button>
+    </div>
+
+    <div class="sidebar-section">
+      <p class="sidebar-label">MOOD TRACKER</p>
+      <div id="mood-tracker">
+        <div class="mood-row">
+          <span class="mood-dot positive"></span>
+          <span class="mood-lbl">Positive</span>
+          <span class="mood-count" id="cnt-positive">0</span>
+        </div>
+        <div class="mood-row">
+          <span class="mood-dot negative"></span>
+          <span class="mood-lbl">Negative</span>
+          <span class="mood-count" id="cnt-negative">0</span>
+        </div>
+        <div class="mood-row">
+          <span class="mood-dot neutral"></span>
+          <span class="mood-lbl">Neutral</span>
+          <span class="mood-count" id="cnt-neutral">0</span>
+        </div>
+      </div>
+      <div class="polarity-wrap">
+        <span class="polarity-label">Session mood</span>
+        <div class="polarity-bar-bg">
+          <div class="polarity-bar-fill" id="polarity-fill" style="width:50%"></div>
+        </div>
+        <div class="polarity-ends"><span>😞</span><span>😊</span></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section" id="last-emotion-section" style="display:none">
+      <p class="sidebar-label">LAST DETECTED</p>
+      <div id="emotion-badge" class="emotion-badge">—</div>
+    </div>
+
+    <div class="sidebar-bottom">
+      <button class="reset-btn" onclick="resetSession()">↺ New Session</button>
+      <p class="disclaimer-mini">Not a substitute for professional care.</p>
+    </div>
+  </aside>
+
+  <!-- ── Main chat area ──────────────────────────────────────────── -->
+  <main class="chat-area">
+
+    <header class="chat-header">
+      <div>
+        <h1>Mental Health Companion</h1>
+        <p class="chat-subtitle">Powered by AI · Sentiment Analysis · NLP</p>
+      </div>
+      <div class="status-dot-wrap"><span class="status-dot"></span><span>Online</span></div>
+    </header>
+
+    <div class="messages" id="messages">
+      <!-- Welcome bubble injected by JS -->
+    </div>
+
+    <div id="typing-indicator" class="typing-indicator hidden">
+      <span></span><span></span><span></span>
+    </div>
+
+    <footer class="chat-footer">
+      <div class="disclaimer-bar">
+        ⚠️ This chatbot is a supportive tool only — not a replacement for professional mental health care.
+        In a crisis? Call <strong>iCall: 9152987821</strong> · <strong>988 (US)</strong> · <strong>116 123 (UK)</strong>
+      </div>
+      <div class="input-row">
+        <textarea
+          id="user-input"
+          placeholder="Share what's on your mind…"
+          rows="1"
+          autocomplete="off"
+        ></textarea>
+        <button class="send-btn" id="send-btn" onclick="sendMessage()">Send</button>
+      </div>
+    </footer>
+
+  </main>
+
+  <script src="/static/chat.js"></script>
+</body>
+</html>

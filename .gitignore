@@ -1,0 +1,25 @@
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# HuggingFace / torch model cache (downloaded at runtime, ~300MB — never commit)
+.cache/
+*.bin
+*.safetensors
+
+# NLTK data (downloaded at runtime)
+nltk_data/
+
+# Environment secrets
+.env
+
+# OS/editor cruft
+.DS_Store
+.vscode/
+.idea/

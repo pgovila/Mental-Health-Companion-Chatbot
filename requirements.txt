@@ -1,0 +1,12 @@
+textblob==0.18.0
+nltk==3.8.1
+colorama==0.4.6
+rich==13.7.0
+flask==3.1.1
+gunicorn==23.0.0
+transformers==4.46.3
+
+# CPU-only torch build (much smaller than the default CUDA build — important
+# for free-tier hosting where disk/RAM is limited and there's no GPU anyway).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.9.0
