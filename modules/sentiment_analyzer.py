@@ -98,7 +98,7 @@ EMOTION_LEXICON: dict[Emotion, list[str]] = {
     ],
     "joy": [
         "happy", "happiness", "joy", "joyful", "excited", "great", "wonderful",
-        "amazing", "fantastic", "awesome", "good", "better", "grateful",
+        "amazing", "fantastic", "awesome", "grateful",
         "thankful", "blessed", "love", "proud", "accomplished", "hopeful",
         "optimistic", "positive", "confident", "energetic", "motivated",
         "inspired", "peaceful", "calm", "relaxed", "content",
@@ -110,34 +110,57 @@ CRISIS_PHRASES: list[str] = [
     "self harm", "self-harm", "hurt myself", "no reason to live",
     "can't go on", "give up on life", "don't want to exist",
     "wish i was dead", "better off dead", "end it all",
+    "better off without me", "better without me", "world would be better without me",
+    "everyone would be better off without me", "no point in living",
+    "no point going on", "tired of living", "tired of being alive",
+    "i'm a burden", "im a burden", "everyone's better off",
+    "nobody would miss me", "no one would miss me", "not meant to be here",
+    "shouldn't be here", "should not be here", "disappear forever",
+    "wish i wasn't born", "wish i was never born", "life isn't worth it",
+    "life isn't worth living", "not worth living",
 ]
 
-# Maps the transformer's 7 general emotion labels onto our 7 domain labels.
-# "disgust" and "surprise" have no direct equivalent in our taxonomy, so they
-# are routed based on polarity at classification time (see _map_transformer_label).
+_CRISIS_WORD_SEQUENCES: list[list[str]] = [
+    ["better", "off", "without", "me"],
+    ["better", "without", "me"],
+    ["nobody", "miss", "me"],
+    ["no", "one", "miss", "me"],
+    ["burden", "everyone"],
+    ["burden", "family"],
+    ["burden", "friends"],
+    ["burden", "everybody"],
+    ["tired", "of", "living"],
+    ["tired", "of", "being", "alive"],
+    ["no", "point", "living"],
+    ["no", "point", "going", "on"],
+    ["wish", "i", "was", "never", "born"],
+    ["wish", "i", "wasn't", "born"],
+    ["everyone", "better", "without", "me"],
+]
+
+_MAX_WORD_GAP = 3
+
+
+def _build_sequence_pattern(words: list[str]) -> re.Pattern:
+    gap = r"(?:\s+\w+){0," + str(_MAX_WORD_GAP) + r"}\s+"
+    return re.compile(gap.join(re.escape(w) for w in words))
+
+
+_CRISIS_SEQUENCE_PATTERNS = [_build_sequence_pattern(seq) for seq in _CRISIS_WORD_SEQUENCES]
+
 _TRANSFORMER_TO_DOMAIN: dict[str, Emotion] = {
     "fear":     "anxiety",
     "sadness":  "sadness",
     "anger":    "anger",
     "joy":      "joy",
     "neutral":  "neutral",
-    "disgust":  "anger",       # closest available match
+    "disgust":  "anger",
 }
 
 _MODEL_NAME = "j-hartmann/emotion-english-distilroberta-base"
 
 
-# ---------------------------------------------------------------------------
-# Analyzer
-# ---------------------------------------------------------------------------
-
 class SentimentAnalyzer:
-    """
-    Combines TextBlob polarity with a transformer emotion classifier
-    (falling back to keyword classification if the model is unavailable)
-    to produce a rich AnalysisResult for every user message.
-    """
-
     def __init__(self) -> None:
         self._transformer_pipeline = None
         self._transformer_load_attempted = False
@@ -145,8 +168,8 @@ class SentimentAnalyzer:
     def analyze(self, text: str) -> AnalysisResult:
         cleaned   = self._clean(text)
         blob      = TextBlob(cleaned)
-        polarity  = blob.sentiment.polarity       # -1 → 1
-        subj      = blob.sentiment.subjectivity   # 0  → 1
+        polarity  = blob.sentiment.polarity
+        subj      = blob.sentiment.subjectivity
 
         sentiment = self._polarity_to_sentiment(polarity)
         emotion, keywords, confidence = self._classify_emotion(cleaned, polarity)
@@ -164,11 +187,6 @@ class SentimentAnalyzer:
             is_crisis   = is_crisis,
         )
 
-    # ------------------------------------------------------------------
-    # Transformer loading (lazy, so app startup stays fast and doesn't
-    # require the model to load unless a message actually gets analyzed)
-    # ------------------------------------------------------------------
-
     def _get_transformer(self):
         if self._transformer_load_attempted:
             return self._transformer_pipeline
@@ -179,24 +197,16 @@ class SentimentAnalyzer:
             self._transformer_pipeline = pipeline(
                 "text-classification",
                 model=_MODEL_NAME,
-                top_k=None,          # return scores for all labels
+                top_k=None,
                 truncation=True,
             )
         except Exception:
-            # Covers ImportError (transformers/torch not installed), OSError
-            # (no internet / model not cached), and any runtime load failure.
-            # We deliberately fail open to keyword-only mode rather than crash.
             self._transformer_pipeline = None
 
         return self._transformer_pipeline
 
-    # ------------------------------------------------------------------
-    # Private helpers
-    # ------------------------------------------------------------------
-
     @staticmethod
     def _clean(text: str) -> str:
-        """Lowercase and strip punctuation clutter (keep apostrophes)."""
         text = text.lower().strip()
         text = re.sub(r"[^\w\s']+", " ", text)
         return re.sub(r"\s+", " ", text)
@@ -214,37 +224,26 @@ class SentimentAnalyzer:
         text: str,
         polarity: float,
     ) -> tuple[Emotion, list[str], float]:
-        """
-        Returns (emotion, matched_keywords, confidence).
-        confidence is the transformer's top-label probability if the
-        transformer ran, otherwise a keyword-density-derived proxy.
-        """
         lexicon_emotion, lexicon_keywords, lexicon_score = self._lexicon_scan(text)
 
-        # Stress and loneliness are NOT in the transformer's label set, so if
-        # the lexicon has a solid hit on either, trust it directly.
         if lexicon_emotion in ("stress", "loneliness") and lexicon_score >= 2:
             return lexicon_emotion, lexicon_keywords, min(0.5 + lexicon_score * 0.1, 0.95)
 
         nlp = self._get_transformer()
         if nlp is not None:
             try:
-                raw = nlp(text)[0]  # list[{"label": ..., "score": ...}]
+                raw = nlp(text)[0]
                 top = max(raw, key=lambda r: r["score"])
                 mapped = self._map_transformer_label(top["label"], polarity)
 
-                # If the transformer landed on "neutral"/"joy" but the lexicon
-                # has a strong, specific stress/loneliness signal, prefer the
-                # lexicon — the transformer simply can't express those labels.
                 if mapped in ("neutral", "joy") and lexicon_emotion in ("stress", "loneliness") and lexicon_score >= 1:
                     return lexicon_emotion, lexicon_keywords, 0.55
 
                 keywords = lexicon_keywords if lexicon_emotion == mapped else []
                 return mapped, keywords, float(top["score"])
             except Exception:
-                pass  # fall through to pure keyword logic below
+                pass
 
-        # ---- Fallback: original pure keyword + polarity approach ----
         if lexicon_score == 0:
             if polarity > 0.05:
                 return "joy", [], 0.4
@@ -262,14 +261,13 @@ class SentimentAnalyzer:
 
     @staticmethod
     def _lexicon_scan(text: str) -> tuple[Emotion, list[str], int]:
-        """Score each emotion by counting matching keywords."""
         scores: dict[Emotion, int] = {e: 0 for e in EMOTION_LEXICON}
         matched: dict[Emotion, list[str]] = {e: [] for e in EMOTION_LEXICON}
 
         words = set(text.split())
         for emotion, keywords in EMOTION_LEXICON.items():
             for kw in keywords:
-                if " " in kw:           # multi-word phrase
+                if " " in kw:
                     if kw in text:
                         scores[emotion] += 2
                         matched[emotion].append(kw)
@@ -288,10 +286,6 @@ class SentimentAnalyzer:
         keywords: list[str],
         confidence: float,
     ) -> float:
-        """
-        Blends absolute polarity, subjectivity, keyword density, and
-        transformer confidence into a 0→1 intensity score.
-        """
         kw_density = min(len(keywords) / 5.0, 1.0)
         raw = (
             (abs(polarity) * 0.3)
@@ -303,4 +297,6 @@ class SentimentAnalyzer:
 
     @staticmethod
     def _check_crisis(text: str) -> bool:
-        return any(phrase in text for phrase in CRISIS_PHRASES)
+        if any(phrase in text for phrase in CRISIS_PHRASES):
+            return True
+        return any(pattern.search(text) for pattern in _CRISIS_SEQUENCE_PATTERNS)
