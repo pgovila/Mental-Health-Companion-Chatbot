@@ -96,7 +96,19 @@ Then open your browser at **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
 3. Alternatively, create the service manually: **New → Web Service**, build command `pip install -r requirements.txt`, start command `gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120`.
 4. First deploy will take a few minutes longer than usual — it's downloading the ~330MB emotion-classification model and CPU-only PyTorch build.
 
-> **A note on the free tier:** Render's free instances have 512MB RAM. The transformer model and PyTorch runtime together typically use 300–450MB once loaded, which is close to that ceiling. If the service crashes or restarts under load, either upgrade to a paid instance, or fall back to keyword-only mode by removing `transformers`/`torch` from `requirements.txt` — the analyzer is written to degrade gracefully to keyword-based classification if the transformer model can't load, so the app keeps working either way.
+> **A note on the free tier:** Render's free instances have 512MB RAM, which isn't enough to run the transformer model and PyTorch runtime reliably in-process (it gets OOM-killed, visible in logs as "exited with status 137"). For that reason, `requirements.txt` deliberately excludes `transformers`/`torch`. **The deployed version can still use the real transformer model for free** via HuggingFace's hosted Inference API instead of loading it locally — see the next section.
+
+## Free accurate classification on Render (via HuggingFace Inference API)
+
+Instead of loading the transformer model in-process (which needs more RAM than the free tier gives you), the analyzer can call it remotely over HTTP using HuggingFace's own free-tier Inference API. This adds no meaningful RAM or dependency weight to your deployment — `huggingface_hub` (already in `requirements.txt`) is a small HTTP client with no `torch` dependency.
+
+1. Create a free HuggingFace account at [huggingface.co](https://huggingface.co/join), then generate an access token at [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) (a "Read" token is enough).
+2. On Render, go to your service → **Environment** tab → add an environment variable: `HF_API_TOKEN` = *(paste your token)*.
+3. Redeploy (or it will pick it up on the next deploy automatically).
+
+That's it — no other code or requirements changes needed. The analyzer tries this remote API automatically once the token is present; if it's absent, or the API call fails for any reason (rate limit, timeout, etc.), the app transparently falls back to keyword + TextBlob classification, so nothing breaks either way.
+
+**Trade-offs to know about:** this is HuggingFace's free, shared, rate-limited tier — meant for demos and moderate traffic, not high-volume production use. The first request after a period of inactivity may take 10–30 seconds while the model "wakes up" on their end (on top of Render's own free-tier cold start, so the very first message after both services have been idle could take up to a minute). For a portfolio/demo project, this is a solid, no-cost way to get real transformer-level accuracy live.
 
 ### Web Interface Features
 

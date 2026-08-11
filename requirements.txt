@@ -5,12 +5,17 @@ rich==13.7.0
 flask==3.1.1
 gunicorn==23.0.0
 
-# NOTE: transformers + torch (the HuggingFace emotion classifier) are
-# intentionally NOT installed here. Render's free tier (512MB RAM) gets
-# OOM-killed (exit 137) when the model loads, so the deployed/live version
-# runs on keyword + TextBlob classification only — the analyzer already
-# falls back to this automatically when the transformer can't be loaded.
-#
-# To use the upgraded transformer-based classifier LOCALLY (more accurate,
-# but needs ~1GB+ RAM), install the extra file instead:
+# huggingface_hub is a small, lightweight client (NO torch/transformers, so
+# no RAM problem) that lets the analyzer call HuggingFace's hosted Inference
+# API over HTTP for real transformer-based emotion classification, without
+# loading any model locally. It only activates if an HF_API_TOKEN
+# environment variable is set (see README "Free accurate classification on
+# Render" section) — without it, the analyzer transparently falls back to
+# keyword + TextBlob classification, so this is safe to always have installed.
+huggingface_hub==0.26.2
+
+# NOTE: transformers + torch (for running the model FULLY LOCALLY instead of
+# via the API) are intentionally NOT installed here. Render's free tier
+# (512MB RAM) gets OOM-killed (exit 137) if that model loads in-process.
+# To use the fully-local version instead of the API version:
 #   pip install -r requirements-local.txt
