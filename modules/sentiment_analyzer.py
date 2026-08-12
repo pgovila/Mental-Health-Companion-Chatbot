@@ -358,8 +358,18 @@ class SentimentAnalyzer:
         lexicon_emotion, lexicon_keywords, lexicon_score, all_scores, all_matched = self._lexicon_scan(text)
 
         # Stress and loneliness are NOT in the transformer's label set, so if
-        # the lexicon has a solid hit on either, trust it directly.
-        if lexicon_emotion in ("stress", "loneliness") and lexicon_score >= 2:
+        # the lexicon has a solid hit on either, it's tempting to trust it
+        # directly and skip calling the transformer at all. BUT: "solid hit"
+        # needs to mean a genuine feeling word, not just multiple ambiguous
+        # topic-word mentions (e.g. "deadline" + "exam" summing to score 2)
+        # — that pattern previously caused "I have a deadline and an exam
+        # tomorrow, feeling great about it!" to be classified as stress
+        # WITHOUT the transformer ever being consulted. Requiring at least
+        # one real feeling word here ensures we only skip the transformer
+        # when there's unambiguous evidence, and let it weigh in on anything
+        # more context-dependent.
+        has_real_feeling_word_early = any(kw not in _WEAK_TOPIC_WORDS for kw in lexicon_keywords)
+        if lexicon_emotion in ("stress", "loneliness") and lexicon_score >= 2 and has_real_feeling_word_early:
             return lexicon_emotion, lexicon_keywords, min(0.5 + lexicon_score * 0.1, 0.95)
 
         raw = self._get_classification(text)  # tries local transformer, then remote HF API
@@ -384,7 +394,7 @@ class SentimentAnalyzer:
                 if (
                     mapped in ("neutral", "joy")
                     and lexicon_emotion in ("stress", "loneliness")
-                    and (lexicon_score >= 2 or has_real_feeling_word)
+                    and has_real_feeling_word
                 ):
                     return lexicon_emotion, lexicon_keywords, 0.55
 
