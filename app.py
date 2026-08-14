@@ -100,41 +100,6 @@ def quote():
     return jsonify({"quote": engine.get_motivational_quote()})
 
 
-@app.route("/debug-hf", methods=["GET"])
-def debug_hf():
-    """
-    TEMPORARY diagnostic route — visit this URL in your browser to see
-    exactly what happens when the app tries to reach the HuggingFace
-    Inference API, without our normal error-swallowing fallback hiding it.
-    Reveals only whether the token is present and its length (never the
-    token itself), plus the real success/error result of a test API call.
-    Remove this route once the issue is diagnosed and fixed — it's not
-    meant to stay in a production deployment long-term.
-    """
-    token = os.environ.get("HF_API_TOKEN")
-    result = {
-        "token_present": bool(token),
-        "token_length":  len(token) if token else 0,
-    }
-    try:
-        from huggingface_hub import InferenceClient
-        client = InferenceClient(token=token)
-        raw = client.text_classification(
-            "I am so happy today",
-            model="j-hartmann/emotion-english-distilroberta-base",
-        )
-        result["success"] = True
-        result["classification_result"] = [
-            {"label": r.label, "score": r.score} for r in raw
-        ]
-    except Exception as e:
-        result["success"] = False
-        result["error_type"] = type(e).__name__
-        result["error_message"] = str(e)
-
-    return jsonify(result)
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
